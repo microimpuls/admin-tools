@@ -3,7 +3,7 @@ import requests, json
 
 """
 Скрипт массовой генерации пробных аккаунтов в Microimpuls Middleware
-Использует TVMiddleware API интерфейс
+Использует Billing API интерфейс
 
 (c) Konstantin Shpinev, 2014
 """
