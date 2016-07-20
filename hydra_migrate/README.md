@@ -1,8 +1,8 @@
 Example of input files
-----------------------
+======================
 
 billing_customers.csv
-~~~~~~~~~~~~~~~~~~~~~
+---------------------
 
 Format:
 user ID;account ID;tariff ID
@@ -15,7 +15,7 @@ Example:
 ```
 
 billing_devices.csv
-~~~~~~~~~~~~~~~~~~~
+-------------------
 
 Format:
 --;account ID;--;MAC;device serial
