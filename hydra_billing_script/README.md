@@ -64,7 +64,7 @@ plugins = python
 
 Скриншоты внешнего приложения "Баланс" шаблона ``focus``:
 
-![Главное меню](/preview/focus_balance_menu.jpg)
+![Главное меню](/hydra_billing_script/preview/focus_balance_menu.jpg)
 
 Пример скрипта кастомизации для привязки приставки:
 ```
