@@ -5,7 +5,7 @@ billing_customers.csv
 ~~~~~~~~~~~~~~~~~~~~~
 
 Format:
-``user ID;account ID;tariff ID``
+`user ID;account ID;tariff ID`
 
 Example:
 ```
@@ -18,8 +18,8 @@ billing_devices.csv
 ~~~~~~~~~~~~~~~~~~~
 
 Format:
-``--;account ID;--;MAC;device serial``
- 
+`--;account ID;--;MAC;device serial`
+
 Example:
 ```
 101236301;1110137;IPTV STB-N9792;00-1A-79-22-63-8A;042014J049672
