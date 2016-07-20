@@ -12,14 +12,9 @@
 (см. [Документация по Billing API](http://mi-smarty-docs.readthedocs.io/ru/latest/integration.html#billing-api)
 и [Настройка клиента](http://mi-smarty-docs.readthedocs.io/ru/latest/service_configuration.html#client-creation)):
 
-HOST
-    URL-адрес Billing API
-
-CLIENT_ID
-    Идентификатор оператора.
-
-API_KEY
-    Ключ для Billing API.
+*HOST*: URL-адрес Billing API
+*CLIENT_ID*: Идентификатор оператора.
+*API_KEY*: Ключ для Billing API.
 
 А также таблицу ассоциации тарифных пакетов в Hydra к тарифным планам в Smarty, пример:
 ```
@@ -37,7 +32,9 @@ tariffs = {
 --------------------------------
 
 Событие на оборудовании абонента при включении/отключении услуги доступа:
+
 ``/opt/hydra/scripts/smarty_billing_api_wrapper.py add_user_tariff  $USER_ID $USER_ACCOUNT $SUBSC_SERVS_LIST``
+
 ``/opt/hydra/scripts/smarty_billing_api_wrapper.py remove_user_tariff $USER_ID $USER_ACCOUNT $SUBSC_SERVS_LIST``
 
 Дополнительная интеграция со стороны абонентского приложения
@@ -67,7 +64,7 @@ plugins = python
 
 Скриншоты внешнего приложения "Баланс" шаблона ``focus``:
 
-!(/preview/focus_balance_menu.jpg)
+![Главное меню](/preview/focus_balance_menu.jpg)
 
 Пример скрипта кастомизации для привязки приставки:
 ```
