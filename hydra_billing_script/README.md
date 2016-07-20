@@ -12,9 +12,11 @@
 (см. [Документация по Billing API](http://mi-smarty-docs.readthedocs.io/ru/latest/integration.html#billing-api)
 и [Настройка клиента](http://mi-smarty-docs.readthedocs.io/ru/latest/service_configuration.html#client-creation)):
 
-*HOST*: URL-адрес Billing API
-*CLIENT_ID*: Идентификатор оператора.
-*API_KEY*: Ключ для Billing API.
+**HOST**: URL-адрес Billing API
+
+**CLIENT_ID**: Идентификатор оператора.
+
+**API_KEY**: Ключ для Billing API.
 
 А также таблицу ассоциации тарифных пакетов в Hydra к тарифным планам в Smarty, пример:
 ```
