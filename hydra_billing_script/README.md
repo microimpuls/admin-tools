@@ -40,14 +40,14 @@ tariffs = {
 Дополнительная интеграция со стороны абонентского приложения
 ------------------------------------------------------------
 
-Скрипты ``hydra_adapter.py`` и ``hydra_adapter_server.py`` позволяют осуществить интеграцию со стороны Smarty для таких функций, как:
+Скрипты ``hydra_adapter.py`` и ``hydra_adapter_server.py`` позволяют осуществить интеграцию со стороны Smarty напрямую в Hydra через вызов хранимых процедур в Oracle для таких функций, как:
 * Привязка/отвязка MAC-адреса приставки к ЛС абонента в Hydra
 * Запрос баланса
 * Запрос списка подключенных услуг и их стоимостей
 * Проведение обещанного платежа
 
-``hydra_adapter_server.py`` представляет собой веб-приложение на базе фреймфорвка Flask и может быть запущен на сервере
-абонентского портала Middleware через uwsgi, пример конфига hydra-billing-backend.ini:
+``hydra_adapter_server.py`` представляет собой веб-приложение на базе фреймфорвка Flask и может быть запущено на сервере
+Smarty через uwsgi + nginx, пример конфигурации uwsgi hydra-billing-backend.ini:
 ```
 [uwsgi]
 master = true
@@ -60,11 +60,37 @@ vacuum = true
 plugins = python
 ```
 
+Пример конфигурации nginx:
+```
+upstream mw1-hydra-billing-backend {
+    server unix:/tmp/hydra-billing-backend.uwsgi.sock;
+}
+
+server {
+    listen 127.0.0.1:65080;
+
+    access_log /var/log/nginx/microimpuls/hydra-billing-backend/nginx.access_log;
+    error_log /var/log/nginx/microimpuls/hydra-billing-backend/nginx.error_log;
+
+    charset utf-8;
+
+    location / {
+        uwsgi_pass mw1-hydra-billing-backend;
+        include uwsgi_params;
+    }
+}
+
+```
+
 Для подключения этих функций абонентский портал кастомизируется внешним приложением "Баланс", а также на уровне событий портала.
 
 Скриншоты внешнего приложения "Баланс" шаблона ``focus``:
 
 ![Главное меню](/hydra_billing_script/preview/focus_balance_menu.jpg)
+![Выбор лицевого счета](/hydra_billing_script/preview/focus_balance_account.jpg)
+![Список подключенных услуг и баланс](/hydra_billing_script/preview/focus_balance_services.jpg)
+![Информация об обещанном платеже](/hydra_billing_script/preview/focus_balance_promised_payment.jpg)
+![Статус проведения обещанного платежа](/hydra_billing_script/preview/focus_balance_promised_payment_info.jpg)
 
 Пример скрипта кастомизации для привязки приставки:
 ```
