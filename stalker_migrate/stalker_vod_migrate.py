@@ -142,8 +142,8 @@ def prepare_sql(file_name, client_id):
             insert_genre(s[10])
             insert_genre(s[11])
 
-            q = "INSERT INTO tvmiddleware_video (name, kinopoisk_id, name_orig, description, year, poster_url, actors, countries, director, client_id, created_at) " \
-                "VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s');" % (s[0], s[2], s[1], s[3], s[4], s[13], s[5], s[6], s[7], client_id, s[8])
+            q = "INSERT INTO tvmiddleware_video (name, kinopoisk_id, name_orig, description, year, poster_url, actors, countries, director, client_id, created_at, available_everywhere) " \
+                "VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', 1);" % (s[0], s[2], s[1], s[3], s[4], s[13], s[5], s[6], s[7], client_id, s[8])
             queries.append(q)
 
             q = "SET @last_id = LAST_INSERT_ID();"
