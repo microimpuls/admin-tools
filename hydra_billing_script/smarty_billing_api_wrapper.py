@@ -14,8 +14,9 @@ from datetime import datetime
 HOST = 'http://example.com' # release
 CLIENT_ID = 1
 API_KEY = 'apikey'
+LOG_ENABLED = False
 
-api = SmartyBillingAPI(HOST, CLIENT_ID, API_KEY)
+api = SmartyBillingAPI(HOST, CLIENT_ID, API_KEY, LOG_ENABLED)
 
 
 tariffs = {
@@ -36,9 +37,12 @@ def get_tariff(tariff):
 
 
 def write_log(message):
-    with open("api_wrapper.log", 'a') as log_file:
-        log_file.write("%s : %s\n" % (datetime.now().isoformat(' '), message))
-
+    if LOG_ENABLED:
+        try:
+            with open("api_wrapper.log", 'a') as log_file:
+                log_file.write("%s : %s\n" % (datetime.now().isoformat(' '), message))
+        except:
+            pass
 
 def check_user_exists(user_id):
     try:
@@ -88,19 +92,25 @@ def add_user_tariff(args):
 
 
 def remove_user_tariff(args):
-    if len(args) < 3:
+    if len(args) < 2:
         return
     user_id = args[0]
     account_id = args[1]
-    tariff_list = args[2].split(',')
-
+    
     create_user_if_not_exists(user_id, account_id)
+    
+    if len(args) >= 3:
+        splitted = args[2].split(',')
+        tariff_list = []
+        for tariff_id in splitted:
+            smarty_tariff_id = get_tariff(tariff_id)
+            if smarty_tariff_id is not None:
+                tariff_list.append(smarty_tariff_id)
+    else:
+        tariff_list = tariffs.keys()
+    
     for tariff_id in tariff_list:
-        smarty_tariff_id = get_tariff(tariff_id)
-        if smarty_tariff_id is None:
-            continue
-        api.customer_tariff_remove(smarty_tariff_id, ext_id=user_id)
-
+        api.customer_tariff_remove(tariff_id, ext_id=user_id)
 
 def add_user_base_tariff(args):
     pass
@@ -121,8 +131,8 @@ func = {
 def handler():
     if len(sys.argv) < 2:
         return
-    with open("api_wrapper.log", 'a') as log_file:
-        write_log(str(sys.argv))
+    
+    write_log(str(sys.argv))
 
     func_name = sys.argv[1]
     args = sys.argv[2:]
@@ -131,5 +141,5 @@ def handler():
     try:
         func[func_name](args)
     except Exception as e:
-        write_log(e.message)
+        write_log(str(e))
 handler()
