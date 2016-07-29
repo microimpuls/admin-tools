@@ -31,7 +31,7 @@ class BillingAPIException(Exception):
 
 class SmartyBillingAPI(object):
 
-    def __init__(self, base_url, client_id, api_key):
+    def __init__(self, base_url, client_id, api_key, write_log):
         """
         :param base_url: хост smarty, например http://smarty.microimpuls.com
         :param client_id: идентефикатор клиента
@@ -40,6 +40,7 @@ class SmartyBillingAPI(object):
         self.base_url = base_url
         self.client_id = client_id
         self.api_key = api_key
+        self.write_log = write_log
 
     def _get_signature(self, request_data):
         sign_source = u''
@@ -67,10 +68,16 @@ class SmartyBillingAPI(object):
         req = urllib2.Request(url, encoded_post_data)
         response = urllib2.urlopen(req)
         api_response = json.loads(response.read())
-        with open("api_wrapper.log", 'a') as log_file:
-            from datetime import datetime
-            log_file.write("%s \nPATH: %s\nDATA: %s\n RESPONSE: %s\n\n" %
-                           (datetime.now().isoformat(' '), str(path), str(data), str(api_response)))
+        
+        if self.write_log:
+            try:
+                with open("api_wrapper.log", 'a') as log_file:
+                    from datetime import datetime
+                    log_file.write("%s \nPATH: %s\nDATA: %s\n RESPONSE: %s\n\n" %
+                            (datetime.now().isoformat(' '), str(path), str(data), str(api_response)))
+            except:
+                pass
+                
         if api_response['error']:
             error_message = "Api Error %(error)s: %(error_message)s" % api_response 
             raise BillingAPIException(api_response['error'], error_message)
