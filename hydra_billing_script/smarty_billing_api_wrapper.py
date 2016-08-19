@@ -16,13 +16,17 @@ CLIENT_ID = 1
 API_KEY = 'apikey'
 LOG_ENABLED = False
 
-api = SmartyBillingAPI(HOST, CLIENT_ID, API_KEY, LOG_ENABLED)
-
+ACCOUNT_ALLOW_LOGIN_BY_ABONEMENT = True
+ACCOUNT_ALLOW_MULTIPLE_LOGIN = True
+ACCOUNT_ACTIVE = True
+ACCOUNT_ALLOW_LOGIN_BY_DEVICE_UID = False
 
 tariffs = {
     2: (1, 2, 3, 4),
     3: (5, 6, 7, 8),
 }
+
+api = SmartyBillingAPI(HOST, CLIENT_ID, API_KEY, LOG_ENABLED)
 
 
 def get_tariff(tariff):
@@ -57,7 +61,9 @@ def add_user(user_id):
 
 
 def add_account(user_id, account_id):
-    api.account_create(ext_id=user_id, abonement=account_id, allow_login_by_abonement=True, active=True)
+    api.account_create(ext_id=user_id, abonement=account_id, allow_login_by_abonement=ACCOUNT_ALLOW_LOGIN_BY_ABONEMENT,
+                       active=ACCOUNT_ACTIVE, allow_multiple_login=ACCOUNT_ALLOW_MULTIPLE_LOGIN, 
+                       allow_login_by_device_uid=ACCOUNT_ALLOW_LOGIN_BY_DEVICE_UID)
 
 
 def create_user_if_not_exists(user_id, account_id):
