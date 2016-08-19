@@ -57,7 +57,7 @@ def add_user(user_id):
 
 
 def add_account(user_id, account_id):
-    api.account_create(ext_id=user_id, abonement=account_id, allow_login_by_abonement=True, active=True)
+    api.account_create(ext_id=user_id, abonement=account_id, allow_login_by_abonement=True, active=True, allow_multiple_login=True)
 
 
 def create_user_if_not_exists(user_id, account_id):
