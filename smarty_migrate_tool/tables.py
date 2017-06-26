@@ -29,8 +29,20 @@ def gen_table(table_name, cursor):
                    % table_name)
 
     columns = []
+    columns_uniq = []
     for row in cursor.fetchall():
         column_name = row[0]
+        if column_name.find('available_') >= 0:
+            continue
+        if column_name == 'has_portal':
+            continue
+        if column_name == 'portal_name':
+            continue
+        if column_name == 'provider':
+            continue
+
+        if column_name in columns_uniq:
+            continue
         column_type = row[1]
         if 'text' in column_type or 'char' in column_type:
             type = 1
@@ -45,6 +57,7 @@ def gen_table(table_name, cursor):
         else:
             type = 0
         columns.append((column_name, type))
+        columns_uniq.append(column_name)
 
     return Table(columns, table_name)
 
@@ -111,8 +124,6 @@ tables_list = [
     'tvmiddleware_accountchannel',
     'tvmiddleware_accountdevice',
     'tvmiddleware_accountgamerecord',
-    'tvmiddleware_casservice',
-    'tvmiddleware_casservice_devices',
     'tvmiddleware_category',
     'tvmiddleware_channel',
     'tvmiddleware_channel_stream_services',
