@@ -25,20 +25,7 @@ Please let us know if you have any questions or concerns.
 -----
 
 ## Template Microimpuls App nginx
-Monitoring for Nginx. It is using script ```nginx-check.sh```. Add macros {$NGINX_STATS_URL} localhost:8080/nginx-stats. Add nginx config:
-server {
-        listen 127.0.0.1:8080 default_server;
-        access_log off;
-        server_tokens off;
-
-          location = /nginx-stats {
-            stub_status on;
-            access_log off;
-            allow 127.0.0.1;
-            deny all;
-        }
-
-}
+Monitoring for Nginx. It is using script ```nginx-check.sh```. Add macros {$NGINX_STATS_URL} localhost:8080/nginx-stats. Add nginx config nginx/conf.d/nginx-stats.
 
 ## Template Microimpuls Disk
 Monitoring for disk usage and performance. You will need to install sysstat package. 
