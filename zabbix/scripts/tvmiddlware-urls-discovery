@@ -1,0 +1,18 @@
+#!/bin/bash
+FIRST=1
+echo "{
+ \"data\":["
+
+cat /usr/share/nginx/html/microimpuls/smarty/tvmiddleware/urls.py | grep -o "tvmiddleware_api.[^']*"  |
+tr -d ";" |
+while read TVMWURL
+  do
+    if [ $FIRST -ne 1 ]
+        then echo ","
+    fi
+    FIRST=0
+    echo -e "\t{\t\"{#TVMWURL}\":\"response_time.${TVMWURL}\"\t}," 
+    echo -e "\t{\t\"{#RCTVMWURL}\":\"requests_count.${TVMWURL}\"\t}" 
+  done
+echo -e "\n   ]
+}"
