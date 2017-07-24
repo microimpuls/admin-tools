@@ -1,0 +1,20 @@
+#!/bin/bash
+FIRST=1
+i=10
+echo "{
+ \"data\":["
+
+micropvr_control -f get_channels -d | grep "u'udp:" | awk '{print $1}' | sort -n |
+while read PVRCHID
+  do
+    if [ $FIRST -ne 1 ]
+        then echo ","
+    fi
+    FIRST=0
+    i=$((i+1))
+    j=$(($i/10))
+    echo -e "\t{\t\"{#PVRCHID}\":\"${PVRCHID}\"\t}" 
+    #echo -e "\t{\t\"{#CHGRP}\":\"${j}\"\t}" 
+  done
+echo -e "\n   ]
+}"
