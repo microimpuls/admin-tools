@@ -12,6 +12,7 @@ import hashlib
 import base64
 import urllib2
 import urllib
+from datetime import datetime
 
 
 class BillingAPIException(Exception):
@@ -54,6 +55,16 @@ class SmartyBillingAPI(object):
         signature = digester.hexdigest()
         return signature
 
+    def _encode_utf_dict(self, in_dict):
+        out_dict = {}
+        for k, v in in_dict.iteritems():
+            if isinstance(v, unicode):
+                v = v.encode('utf8')
+            elif isinstance(v, str):
+                v.decode('utf8')
+            out_dict[k] = v
+        return out_dict
+
     def _get_full_url(self, path):
         parsed_base_url = urlparse.urlparse(self.base_url)
         full_url = urlparse.urlunparse(parsed_base_url._replace(path=path))
@@ -64,20 +75,22 @@ class SmartyBillingAPI(object):
         data = data or {}
         data['client_id'] = self.client_id
         data['signature'] = self._get_signature(data)
-        encoded_post_data = urllib.urlencode(data)
+        encoded_post_data = urllib.urlencode(self._encode_utf_dict(data))
         req = urllib2.Request(url, encoded_post_data)
         response = urllib2.urlopen(req)
         api_response = json.loads(response.read())
-        
-        if self.write_log:
-            try:
+
+        try:
+            message = u"%s \nPATH: %s\nDATA: %s\n RESPONSE: %s\n\n" % (datetime.now().isoformat(' '),
+                                                                       unicode(path), unicode(data),
+                                                                       unicode(api_response))
+            if self.write_log:
                 with open("api_wrapper.log", 'a') as log_file:
-                    from datetime import datetime
-                    log_file.write("%s \nPATH: %s\nDATA: %s\n RESPONSE: %s\n\n" %
-                            (datetime.now().isoformat(' '), str(path), str(data), str(api_response)))
-            except:
-                pass
-                
+                    log_file.write(message.encode('utf8'))
+            else:
+                print message
+        except Exception as e:
+            print "Error: " + repr(e)
         if api_response['error']:
             error_message = "Api Error %(error)s: %(error_message)s" % api_response 
             raise BillingAPIException(api_response['error'], error_message)
@@ -136,6 +149,34 @@ class SmartyBillingAPI(object):
         }
         return self._api_request('/billing/api/customer/tariff/assign/', params)
 
+    def customer_modify(self, **kwargs):
+        params = {}
+        fields = [
+            'firstname', 'middlename', 'lastname', 'birthdate',
+            'passport_number', 'passport_series', 'passport_issue_date', 'passport_issued_by',
+            'postal_address_street', 'postal_address_bld', 'postal_address_apt', 'postal_address_zip',
+            'billing_address_street', 'billing_address_bld', 'billing_address_apt', 'billing_address_zip',
+            'mobile_phone_number', 'phone_number_1', 'phone_number_2', 'fax_phone_number', 'email', 'company_name',
+            'comment', 'auto_activation_period', 'ext_id', 'customer_id'
+        ]
+
+        for key, value in kwargs.items():
+            if key in fields:
+                params[key] = value
+        return self._api_request('/billing/api/customer/modify/', params)
+
+    def account_modify(self, **kwargs):
+        params = {}
+        fields = ['password', 'account_id', 'active', 'status_reason', 'auto_activation_period',
+                  'abonement', 'extension_date', 'preferred_timeshift_offset',
+                  'activation_date', 'deactivation_date', 'allow_multiple_login', 'allow_login_by_abonement',
+                  'allow_login_by_device_uid', 'data_center', 'parent_code', 'template', 'use_timeshift']
+
+        for key, value in kwargs.items():
+            if key in fields:
+                params[key] = value
+        return self._api_request('/billing/api/account/modify/', params)
+
     def customer_tariff_remove(self, tariff_id, customer_id=-1, ext_id=-1):
         params = {
             'customer_id': customer_id,
@@ -176,3 +217,10 @@ class SmartyBillingAPI(object):
     def tariff_list(self):
         return self._api_request('/billing/api/tariff/list/')
 
+    def account_info(self, account_id=None, abonement=None):
+        params = {}
+        if account_id is not None:
+            params['account_id'] = account_id
+        else:
+            params['abonement'] = abonement
+        return self._api_request('/billing/api/account/info/', params)
