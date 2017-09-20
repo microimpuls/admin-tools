@@ -8,16 +8,21 @@
 """
 
 import cx_Oracle
-import codecs
 import os
 import datetime
+from settings import *
 os.environ["NLS_LANG"] = "Russian_Russia.UTF8"
 
-USER = 'AIS_NET'
-PASSWORD = 'pass'
-HOST = 'example.com'
-DBNAME = 'db'
-IP = 'example.com'
+# имя типа пакета в поле VC_GOOD_TYPE_NAME
+PACKET_TYPE_NAME = u'Пакет услуг'
+
+
+def fine_print(toprint):
+    for result in toprint:
+        for e in result:
+            c = unicode(str(e), "utf8")
+            print c,
+        print
 
 
 class HydraAdapterError(Exception):
@@ -28,7 +33,7 @@ class HydraAdapterError(Exception):
 
 class HydraConnection:
 
-    _ADD_SERIAL = """
+    _ADD_SERIAL = u"""
         DECLARE
             num_N_OBJECT_ID SI_OBJECTS.N_OBJECT_ID%TYPE := :obj_id;
         BEGIN
@@ -41,7 +46,7 @@ class HydraConnection:
         END;
     """
 
-    _ADD_MAC = """
+    _ADD_MAC = u"""
         DECLARE
             num_N_ADDRESS_ID  SI_ADDRESSES.N_ADDRESS_ID%TYPE;
             num_N_ADDR_ADDRESS_ID         SI_ADDR_ADDRESSES.N_ADDR_ADDRESS_ID%TYPE;
@@ -63,7 +68,7 @@ class HydraConnection:
         END;
     """
 
-    _QUERY_CLOSE_MAC = """
+    _QUERY_CLOSE_MAC = u"""
         DECLARE
         BEGIN
             SI_ADDRESSES_PKG.SI_OBJ_ADDRESSES_PUT(
@@ -77,34 +82,43 @@ class HydraConnection:
         END;
     """
 
-    _QUERY_GET_STB_ID_SERIAL_MAC = """
+    _QUERY_GET_STB_ID_SERIAL_MAC = u"""
         WITH
-            ud AS (SELECT N_DEVICE_ID  FROM TABLE(SI_USERS_PKG_S.GET_USER_DEVICES(:user_id)) WHERE N_DEVICE_GOOD_ID = 50701401),
-            dc AS (SELECT * FROM SI_V_OBJECTS_SPEC_SIMPLE WHERE N_MAIN_OBJECT_ID IN (SELECT * FROM ud) AND N_GOOD_ID = 50708501),
-            ds AS (SELECT N_OBJECT_ID, VC_SERIAL FROM SI_V_DEVICES  WHERE N_OBJECT_ID IN (SELECT * FROM ud)),
-            ad AS (SELECT * FROM SI_V_OBJ_ADDRESSES_SIMPLE a WHERE a.N_OBJECT_ID IN (SELECT dc.N_OBJECT_ID FROM dc) AND a.N_ADDR_TYPE_ID=4006)
-        SELECT
+            ud AS (select N_DEVICE_ID
+                       from table(SI_USERS_PKG_S.GET_USER_DEVICES(:user_id))
+                       where N_DEVICE_GOOD_ID = 50701401),
+            dc AS (select * from SI_V_OBJECTS_SPEC_SIMPLE
+                       where N_MAIN_OBJECT_ID in (select * from ud) and N_GOOD_ID = 50708501),
+            ds AS (select N_OBJECT_ID, VC_SERIAL
+                       from SI_V_DEVICES
+                       where N_OBJECT_ID in (select * from ud)),
+            ad AS (select * from SI_V_OBJ_ADDRESSES_SIMPLE a
+                       where a.N_OBJECT_ID in (select dc.N_OBJECT_ID from dc) and a.N_ADDR_TYPE_ID=4006)
+        select
             m.N_DEVICE_ID AS d_id,
             c.VC_CODE AS d_name,
             s.VC_SERIAL AS d_serial,
             c.N_OBJECT_ID AS c_id,
             c.VC_NAME AS c_name,
             a.VC_CODE AS c_mac
-        FROM
-            ud m LEFT JOIN
-            dc c ON m.N_DEVICE_ID = c.N_MAIN_OBJECT_ID LEFT JOIN
-            ds s ON m.N_DEVICE_ID = s.N_OBJECT_ID LEFT JOIN
-            ad a ON a.N_OBJECT_ID = c.N_OBJECT_ID
+        from
+            ud m left join
+            dc c on m.N_DEVICE_ID = c.N_MAIN_OBJECT_ID left join
+            ds s on m.N_DEVICE_ID = s.N_OBJECT_ID left join
+            ad a on a.N_OBJECT_ID = c.N_OBJECT_ID
     """
 
-    _QUERY_GET_ALL_SERVS_ON_STB = """
-            SELECT N_GOOD_ID,VC_GOOD_NAME, VC_ACCOUNT, N_ACCOUNT_ID, N_OBJECT_ID FROM
-            TABLE(SI_USERS_PKG_S.USERS_CURRENT_SERVS_LIST(:user_id, 1))
-            WHERE N_OBJECT_ID IN (%s)
-            AND N_DOC_STATE_ID = 4003
+    _QUERY_GET_ALL_SERVICES_ON_STB = u"""
+            select N_GOOD_ID, VC_GOOD_NAME, VC_ACCOUNT, N_ACCOUNT_ID, N_OBJECT_ID from
+            table(SI_USERS_PKG_S.USERS_CURRENT_SERVS_LIST(:user_id, 1))
+            where N_OBJECT_ID in (%s)
+            and N_DOC_STATE_ID = 4003
     """
-    
-    _QUERY_MAIN_INIT = u"""
+
+    u"""
+    Инициализирует сессию по паре 'имя пользователя'/'пароль'
+    """
+    _MAIN_INIT = u"""
         BEGIN
           MAIN.INIT(
              vch_VC_IP        => :ip,
@@ -115,18 +129,113 @@ class HydraConnection:
         END;
     """
 
-    _QUERY_GET_OFFICE_USER = """
-        SELECT N_SUBJECT_ID
-        FROM SI_SUBJ_SERVICES
-        WHERE
-            VC_LOGIN_REAL = :login AND
-            VC_PASS = :password AND
-            C_ACTIVE = 'Y' AND
-            N_SERVICE_ID = SYS_CONTEXT('CONST', 'NETSERV_ARM_Private_Office') AND
+    _QUERY_GET_OFFICE_USER = u"""
+        select N_SUBJECT_ID
+        from SI_SUBJ_SERVICES
+        where
+            VC_LOGIN_REAL = :login and
+            VC_PASS = :password and
+            C_ACTIVE = 'Y' and
+            N_SERVICE_ID = SYS_CONTEXT('CONST', 'NETSERV_ARM_Private_Office') and
             N_AUTH_TYPE_ID = SYS_CONTEXT('CONST','AUTH_TYPE_LOGINPASS')
     """
 
-    def __init__(self, user=USER, password=PASSWORD, host=HOST, db_name=DBNAME):
+    u"""
+    Получает список активных пакетов.
+    SUB.N_SERVICE_ID      - ID услуги
+    SUB.N_OBJECT_ID       - ID подписанного оборудования
+    SUB.VC_SERVICE        - наименование услуги
+    GS.VC_GOOD_TYPE_NAME  - тип услуги (услуга или пакет услуг)
+    SS.VC_NAME            - полное наименование субъекта учёта
+    DEND                  - дата окончания текущей услуги, если оно пустое,
+                            то пользователю доступен только обязательный пакет.
+    """
+    _QUERY_GET_SUBSCRIPTIONS_AND_DATES = u"""
+        select SUB.N_SERVICE_ID,
+               SUB.N_OBJECT_ID,
+               SUB.VC_SERVICE,
+               GS.VC_GOOD_TYPE_NAME,
+               SS.VC_NAME,
+               TO_CHAR((select INV.D_END from SD_V_INVOICES_C INV
+                          where
+                              INV.N_DOC_ID=SUB.N_INVOICE_ID and
+                              INV.D_END > SYSDATE and
+                              INV.N_SERVICE_ID='1662333301'
+                        ),'DD.MM.YYYY HH24:MI:SS') DEND
+        from
+            SI_V_SUBSCRIPTIONS     SUB,
+            SR_V_GOODS_SIMPLE      GS,
+            SI_V_SUBJ_ACCOUNTS     SACC,
+            SI_V_SUBJECTS          SS
+        where
+            GS.N_GOOD_ID = SUB.N_SERVICE_ID and
+            SUB.VC_ACCOUNT = :account and
+            SACC.N_ACCOUNT_ID=SUB.N_ACCOUNT_ID and
+            SS.N_SUBJECT_ID=SI_SUBJECTS_PKG_S.GET_BASE_SUBJECT_ID(SACC.N_SUBJECT_ID) and
+            SUB.D_END IS NULL and
+            GS.N_PARENT_GOOD_ID IN (12181237601, 50667201) and
+            exists (select N_DOC_IDFROM SD_V_INVOICES_C CCC
+                    where CCC.D_END > SYSDATE and
+                          CCC.N_DOC_ID = SUB.N_INVOICE_ID and
+                          CCC.N_SERVICE_ID='1662333301')
+    """
+
+    u"""
+    Получает список активных пакетов.
+    SUB.N_SERVICE_ID       - ID услуги
+    GS.N_GOOD_ID 	       - ID услуги в номенклатуре
+    SUB.N_PAR_SUBSCRIPTION_ID 	- ID родительской услуги
+    SUB.N_DOC_ID		   - ID договора
+    SUB.N_ACCOUNT_ID       - ID лицевого счета
+    SUB.N_OBJECT_ID        - ID подписанного оборудования
+    SUB.VC_SERVICE         - Наименование услуги
+    SS.VC_NAME             - Полное наименование субъекта учёта
+    """
+    _QUERY_GET_SUBSCRIPTIONS = u"""
+        select
+            SUB.N_SERVICE_ID,
+            GS.N_GOOD_ID,
+            SUB.N_PAR_SUBSCRIPTION_ID,
+            SUB.N_DOC_ID,
+            SUB.N_ACCOUNT_ID,
+            SUB.N_OBJECT_ID,
+            SUB.VC_SERVICE,
+            SS.VC_NAME,
+            SS.N_SUBJECT_ID
+        from
+            SI_V_SUBSCRIPTIONS     SUB,
+            SR_V_GOODS_SIMPLE      GS,
+            SI_V_SUBJ_ACCOUNTS     SACC,
+            SI_V_SUBJECTS          SS
+        where
+            GS.N_GOOD_ID = SUB.N_SERVICE_ID and
+            SUB.VC_ACCOUNT= :account and
+            SACC.N_ACCOUNT_ID=SUB.N_ACCOUNT_ID and
+            SS.N_SUBJECT_ID=SI_SUBJECTS_PKG_S.GET_BASE_SUBJECT_ID(SACC.N_SUBJECT_ID) and
+            SUB.D_END IS NULL and
+            GS.N_PARENT_GOOD_ID IN (12181237601, 50667201) and
+            exists (select N_DOC_IDFROM SD_V_INVOICES_C CCC
+                    where CCC.D_END > SYSDATE and
+                          CCC.N_DOC_ID = SUB.N_INVOICE_ID and
+                          CCC.N_SERVICE_ID='1662333301')
+    """
+
+    u"""
+    Перезаписывает подписки.
+    num_N_PAR_SUBJ_GOOD_ID - идентификатор подписки на родительскую услугу.
+    t_GOODS_LIST - идентификаторы услуг, которые должны быть подключены,
+                   уже подключенные услуги, не входящие в список, отключаются.
+    """
+    _OVERWRITE_SUBSCRIPTIONS = u"""
+    BEGIN
+      AP_USER_OFFICE_PKG.PROCESS_ADD_GOODS(
+        num_N_PAR_SUBJ_GOOD_ID => 10444710501,
+        t_GOODS_LIST => AIS_NET.NUMBER_TABLE (%s)
+      );
+    END;
+    """
+
+    def __init__(self, user=DB_USER, password=DB_PASSWORD, host=DB_HOST, db_name=DB_NAME):
         self._user = user
         self._password = password
         self._host = host
@@ -154,6 +263,9 @@ class HydraConnection:
         self.close()
 
     def query(self, query, args):
+        """
+        Выполняет запрос и возвращает результат через fetchall
+        """
         cur = self._con.cursor()
         cur.execute(query, args)
         out = cur.fetchall()
@@ -161,13 +273,20 @@ class HydraConnection:
         return out
 
     def query_wo_fetch(self, query, args):
+        """
+        Выполняет запрос и не возвращает результат
+        """
         cur = self._con.cursor()
         cur.execute(query, args)
         cur.close()
 
-    def call_function(self, function, type, args):
+    def call_function(self, function, return_type, args):
+        """
+        Выполняет функцию, возвращает результат.
+        Требует ручного указания возвращаемого типа через параметр return_type.
+        """
         cur = self._con.cursor()
-        res = cur.callfunc(function, type, args)
+        res = cur.callfunc(function, return_type, args)
         cur.close()
         return res
 
@@ -178,6 +297,10 @@ class HydraConnection:
         return res
     
     def get_user_by_login_pass(self, login, password):
+        """
+        Получет ID пользователя с заданным логином и паролем.
+        Возвращет -1 если пользователь не найден.
+        """
         args = {
             'login': login,
             'password': password,
@@ -188,24 +311,51 @@ class HydraConnection:
         return result[0][0]
 
     def main_init(self, user, password):
+        """
+        Инициализирует сессию.
+        Необходимо выполнять данное действие перед выполнением функций и процедур,
+        в противном случае возможна их некорректная работа.
+        """
         args = {
-            'ip': IP,
+            'ip': CURRENT_IP,
             'user': user,
             'password': password,
         }
-        self.query_wo_fetch(HydraConnection._QUERY_MAIN_INIT, args)
+        self.query_wo_fetch(HydraConnection._MAIN_INIT, args)
 
     def get_promised_payment(self, account):
         query = "select * from AP_V_PROMISED_PAYMENTS where N_ACCOUNT_ID = :account"
         args = {'account': account}
-        #args = {}
-        #query_str = "select * from AP_V_PROMISED_PAYMENTS where ROWNUM < 1000"
         result = self.query(query, args)
         return result
 
+    def get_goods_and_dates(self, account):
+        """
+        Возвращает список кортежей с полями:
+            0. ID услуги
+            1. ID подписанного оборудования
+            2. Наименование услуги
+            3. Тип услуги (услуга или пакет услуг)
+            4. ФИО пользователя
+            5. дата окончания текущей услуги в формате 'DD.MM.YYYY HH24:MI:SS',
+               если оно пустое, то пользователю доступен только обязательный пакет.
+        """
+        query = HydraConnection._QUERY_GET_SUBSCRIPTIONS_AND_DATES
+        args = {'account': account}
+        result = self.query(query, args)
+        return result
+
+    def get_goods(self, account):
+        query = HydraConnection._QUERY_GET_SUBSCRIPTIONS
+        args = {'account': account}
+        result = self.query(query, args)
+        return result
+
+    def overwrite_subscriptions(self, account, tariffs):
+        query = HydraConnection._OVERWRITE_SUBSCRIPTIONS % ','.join(tariffs)
+        self.query_wo_fetch(query, {})
+
     def set_promised_payment(self, account_id):
-        # proc = "AP_USER_OFFICE_PKG.SET_PROMISED_PAY"
-        # self.call_proc(proc, (account, ))
         query = "begin\nAP_USER_OFFICE_PKG.SET_PROMISED_PAY(:account_id);\nend;"
         args = {
             'account_id': account_id,
@@ -213,12 +363,20 @@ class HydraConnection:
         self.query_wo_fetch(query, args)
         self.commit()
 
-    def get_stb_id_seral_mac(self, user_id):
+    def get_stb_list(self, user_id):
+        """
+        0. DEVICE_ID
+        1. Имя устройства
+        2. Серийный номер устройства
+        3. OBJECTS_ID
+        4.
+        5. MAC-адрес
+        """
+
         args = {'user_id': user_id}
         return self.query(HydraConnection._QUERY_GET_STB_ID_SERIAL_MAC, args)
 
-    def get_all_servs_on_stb(self, user_id, stb_list):
-        # result = self.get_stb_id_seral_mac(user_id)
+    def get_all_services_on_stb(self, user_id, stb_list):
         objs = []
         for row in stb_list:
             if row[0]:  # DEVICE_ID
@@ -229,14 +387,14 @@ class HydraConnection:
             'user_id': user_id,
         }
 
-        return self.query(HydraConnection._QUERY_GET_ALL_SERVS_ON_STB % ','.join(objs), args)
+        return self.query(HydraConnection._QUERY_GET_ALL_SERVICES_ON_STB % ','.join(objs), args)
 
     def get_stb(self, user_id, mac, serial):
-        stb_list = self.get_stb_id_seral_mac(user_id)
-        servs_list = self.get_all_servs_on_stb(user_id, stb_list)
+        stb_list = self.get_stb_list(user_id)
+        service_list = self.get_all_services_on_stb(user_id, stb_list)
         for stb in stb_list:
-            for serv in servs_list:
-                if stb[2] is None and stb[5] is None and (stb[0] == serv[4] or stb[3] == serv[4]):
+            for service in service_list:
+                if stb[2] is None and stb[5] is None and (stb[0] == service[4] or stb[3] == service[4]):
                     # serial is none, mac is none, not C_ID/D_ID == N_OBJECT_ID(port)
                     return stb
         return None
@@ -251,11 +409,14 @@ class HydraConnection:
         stb = self.get_stb(user_id, mac, serial)
         if stb is None:
             raise HydraAdapterError(u"Все устройства уже зарегистрированы", 3)
-        self._set_serial(stb[0], user_id, serial)  # stb0 - device_id (D_ID)
-        self._set_mac(mac, stb[3])  # stb3 - port_id (C_ID)
+        self._set_serial(stb[0], user_id, serial)  # stb[0] - device_id (D_ID)
+        self._set_mac(mac, stb[3])  # stb[3] - port_id (C_ID)
         self.commit()
 
     def _set_serial(self, obj_id, owner_id, serial, firm_id=100, good_id=50701401):
+        """
+        Один тип приставки - 100
+        """
         args = {
             'obj_id': obj_id,
             'owner_id': owner_id,
@@ -263,8 +424,7 @@ class HydraConnection:
             'firm_id': firm_id,
             'good_id': good_id,
         }
-        #args = {}
-        q = HydraConnection._ADD_SERIAL# % (obj_id, good_id, serial, firm_id, owner_id)
+        q = HydraConnection._ADD_SERIAL
         self.query_wo_fetch(q, args)
 
     def _set_mac(self, mac, port_id):
@@ -274,8 +434,7 @@ class HydraConnection:
         }
         self.query_wo_fetch(HydraConnection._ADD_MAC, args)
 
-    def get_all_servs(self, user_id, account_id):
-        # query = "SELECT * FROM TABLE(SI_USERS_PKG_S.USERS_CURRENT_SERVS_LIST(:user_id,1))"
+    def get_all_services(self, user_id, account_id):
         query = """
             select VC_GOOD_NAME, N_SERVS_SUM 
             from table(SI_USERS_PKG_S.USERS_CURRENT_SERVS_LIST(:user_id)) 
@@ -288,15 +447,21 @@ class HydraConnection:
         return self.query(query, args)
 
     def get_account_by_ls(self, ls):
+        """
+        Запрашивает ID пользователя и ID аккаунта для лицевого счёта.
+        Бросает исключаение с кодом 2 если лицевой счёт не найден.
+        """
         query = "select N_ACCOUNT_ID, N_SUBJECT_ID from SI_V_SUBJ_ACCOUNTS where VC_CODE = :ls"
         args = {'ls': ls}
         result = self.query(query, args)
         if len(result) == 0:
             raise HydraAdapterError(u"Лицевой счёт не найден", 2)
-        return result[0][1], result[0][0]
+        user_id = result[0][1]
+        account_id = result[0][0]
+        return user_id, account_id
 
     def set_mac_close_date(self, user_id, mac):
-        stbs = self.get_stb_id_seral_mac(user_id)
+        stbs = self.get_stb_list(user_id)
         current_stb = None
         for stb in stbs:
             if stb[5] == mac:
@@ -308,7 +473,11 @@ class HydraConnection:
         object_id = current_stb[0]
         device_id = current_stb[3]
 
-        query = "select N_OBJ_ADDRESS_ID,N_OBJECT_ID,N_ADDRESS_ID from SI_V_OBJ_ADDRESSES_SIMPLE where VC_CODE = :mac and (N_OBJECT_ID = :obj_id or N_OBJECT_ID = :dev_id)"
+        query = """
+            select N_OBJ_ADDRESS_ID,N_OBJECT_ID,N_ADDRESS_ID
+            from SI_V_OBJ_ADDRESSES_SIMPLE
+            where VC_CODE = :mac and (N_OBJECT_ID = :obj_id or N_OBJECT_ID = :dev_id)
+        """
         args = {
             'mac': mac,
             'obj_id': object_id,
@@ -330,17 +499,20 @@ class HydraConnection:
     def get_balance(self, account):
         args = (account, datetime.datetime.now())
         function = "SI_USERS_PKG_S.GET_ACCOUNT_BALANCE_SUM"
-        type = cx_Oracle.NUMBER
-        return self.call_function(function, type, args)
+        return_type = cx_Oracle.NUMBER
+        return self.call_function(function, return_type, args)
 
     def get_recommended_pay(self, user_id):
+        """
+        Получает рекомендованный платёж для аккаунта
+        """
         args = (user_id, )
         function = "SI_USERS_PKG_S.GET_USER_RECOMMENDED_PAY"
-        type = cx_Oracle.NUMBER
-        return self.call_function(function, type, args)
+        return_type = cx_Oracle.NUMBER
+        return self.call_function(function, return_type, args)
 
     def get_recommended_pay_list(self, account):
-        query_str = "SELECT * FROM table(SI_USERS_PKG_S.GET_RECOMMENDED_PAYMENT_LIST(:account))"
+        query_str = "select * from table(SI_USERS_PKG_S.GET_RECOMMENDED_PAYMENT_LIST(:account))"
         args = {'account': account}
         result = self.query(query_str, args)
         return result
@@ -353,11 +525,27 @@ class HydraConnection:
         self.query(query_str, args)
 
     def accounts(self, maxrow):
-        query_str = "SELECT * FROM   SI_V_SUBJ_ACCOUNTS WHERE  N_ACCOUNT_TYPE_ID = SYS_CONTEXT('CONST', 'ACC_TYPE_Personal')" \
-                    "and ROWNUM <= :maxrow"
+        query_str = """select *
+                from SI_V_SUBJ_ACCOUNTS
+                where
+                    N_ACCOUNT_TYPE_ID = SYS_CONTEXT('CONST', 'ACC_TYPE_Personal') and
+                    ROWNUM <= :maxrow
+        """
         args = {'maxrow': maxrow}
         result = self.query(query_str, args)
         return result
+
+    def init_session(self, user_id, password=None, login=None):
+        """
+        Инициализируется сессию для пользователя user_id, запрашивает логин и пароль
+        """
+        if login is None or password is None:
+            login, password = self.get_lk_login_pass(user_id)
+
+        if login is None or password is None or len(login) == 0:
+            raise HydraAdapterError(u'Ошибка авторизации', 7)
+
+        self.main_init(login, password)
 
     def get_lk_login_pass(self, user_id):
         query_str = """
@@ -377,12 +565,16 @@ class HydraConnection:
         password = '' if result[0][1] is None else result[0][1]
         return unicode(login, "utf8"), unicode(password, "utf8")
 
-    @staticmethod
-    def fine_print(toprint):
-        for result in toprint:
-            for e in result:
-                c = unicode(str(e), "utf8")
-                print c,
-            print
+    def get_active_billing_subscriptions(self, account_id):
+        def check_date(good):
+            # проверяем, что пакет ещё не истёк
+            good_dt = datetime.datetime.strptime(good[5], '%d.%m.%Y %H:%M:%S')
+            return good_dt > dt
 
- 
+        dt = datetime.datetime.now()
+        return filter(check_date, self.get_goods_and_dates(account_id))
+
+    def get_active_billing_packets(self, account_id):
+        # Фильтруем по названию типа пакета
+        packet_type = PACKET_TYPE_NAME
+        return filter(lambda x: x[3] == packet_type, self.get_active_billing_packets(account_id))

@@ -11,10 +11,11 @@ import json
 from hydra_adapter import HydraConnection, HydraAdapterError
 import datetime
 import io
+import settings
+import adapter_utils
 
 app = Flask(__name__)
 app.debug = False
-LOG_ENABLED = False
 
 # общие ошибки:
 # -1 - неизвестная ошибка
@@ -23,9 +24,15 @@ LOG_ENABLED = False
 
 
 def log(message):
-    if LOG_ENABLED:
-        with io.open('/var/log/microimpuls/hydra.log', 'a', encoding='utf8') as f:
-            f.write(u"%s : %s \n" % (datetime.datetime.now().isoformat(), message))
+    try:
+        message = u"%s : %s \n" % (datetime.datetime.now().isoformat(), message)
+        if settings.LOG_ENABLED:
+            with io.open('/var/log/microimpuls/hydra.log', 'a', encoding='utf8') as f:
+                f.write(message)
+        else:
+            print message
+    except Exception as e:
+        print "Can't write log: " + repr(e)
 
 
 def get_int(param_name):
@@ -44,7 +51,7 @@ def get_balance(account):
     with HydraConnection() as conn:
         user_id, account_id = conn.get_account_by_ls(account)
         balance = conn.get_balance(account_id)
-        servs = conn.get_all_servs(user_id, account_id)
+        servs = conn.get_all_services(user_id, account_id)
         recommended = conn.get_recommended_pay(user_id)
     return balance, servs, recommended
 
@@ -53,16 +60,13 @@ def set_promised_payment(account, login=None, password=None):
     error_code, error = 0, u''
     with HydraConnection() as conn:
         user_id, account_id = conn.get_account_by_ls(account)
-        
-        if login is None:
-            login, password = conn.get_lk_login_pass(user_id)
-        
-        if login is None or password is None or len(login) == 0:
+
+        try:
+            conn.init_session(user_id)
+        except HydraAdapterError:
             return 1002, u"Ошибка авторизации"
 
         log(u'set_payment: account %s, login %s, password %s, user_id %s' % (account, login, password, str(user_id)))
-
-        
         
         conn.main_init(login, password)
         
@@ -71,9 +75,11 @@ def set_promised_payment(account, login=None, password=None):
             conn.set_promised_payment(account_id)
             recommended = conn.get_recommended_pay(user_id)
             if abs(recommended) > 1e-9:
-                error_code, error = 1001, u"Ошибка установки обещанного платежа"  # не смогли установить обещанный платёж
+                # не смогли установить обещанный платёж
+                error_code, error = 1001, u"Ошибка установки обещанного платежа"
         else:
-            error_code, error = 1000, u"Обещанный платёж не требуется"  # не можем установить обещанный платёж
+            # нет причин для установки обещанного платежа, рекомендуемый платёж не больше нуля
+            error_code, error = 1000, u"Обещанный платёж не требуется"
     return error_code, error
 
 
@@ -83,9 +89,37 @@ def set_mac_close_date(mac, account):
         conn.set_mac_close_date(user_id, mac)
 
 
+def check_device(conn, user_id, serial, mac):
+    """
+    0 - проверка успешна
+    1 - нет такого устройства в БД
+    2 - превышен лимит устройств
+    """
+    assert(isinstance(conn, HydraConnection))
+    stb_list = conn.get_stb_list(user_id)
+    packet_list = conn.get_active_billing_packets(user_id)
+
+    # проверяем наличие свободных пакетов (количество пакетов должно быть больше, чем количество приставок)
+    if len(packet_list) <= len(stb_list):
+        return 2
+
+    # проверяем, что приставка есть в базе у данного пользователя
+    mac = mac.lower()
+    serial = serial.lower()
+    for stb in stb_list:
+        if stb[5].lower() == mac and stb[2].lower() == serial:
+            return 0
+    return 1
+
+
 def add_device(account, mac, serial):
     with HydraConnection() as conn:
         user_id, account_id = conn.get_account_by_ls(account)
+        check_code = check_device(conn, user_id, serial, mac)
+        if check_code == 1:
+            raise HydraAdapterError(u'Устройство не найдено', 1010)
+        if check_code == 2:
+            raise HydraAdapterError(u'Превышен лимит устройств', 1011)
         conn.set_mac_and_serial(user_id, mac, serial)
 
 
@@ -96,6 +130,43 @@ def check_login_pass(account, user, password):
         user = conn.get_user_by_login_pass(user, password)
         if user_id != user:
             error = 1000
+    return error
+
+
+def add_tariff(account, tariff):
+    error = 0
+    removing_list = adapter_utils.get_all_billing_tariffs(tariff, settings.tariffs)
+    if len(removing_list) > 0:
+        with HydraConnection() as conn:
+            goods = conn.get_goods(account)
+            tariff_list = map(lambda t: t[0], goods)
+
+            perform_action = False
+            for tariff_id in removing_list:
+                if tariff_id in tariff_list:
+                    tariff_list.remove(tariff_id)
+                    perform_action = True
+                    
+            if perform_action:
+                user_id, account_id = conn.get_account_by_ls(account)
+                conn.init_session(user_id)
+                conn.overwrite_subscriptions(account, tariff_list)
+    return error
+
+
+def remove_tariff(account, tariff):
+    error = 0
+    tariff_id = adapter_utils.get_any_billing_tariff(tariff, settings.tariffs)
+    if tariff_id == -1:
+        error = 1010
+    else:
+        with HydraConnection() as conn:
+            goods = conn.get_goods(account)
+            tariff_list = map(lambda t: t[0], goods)
+            if tariff_id not in tariff_list:
+                user_id, account_id = conn.get_account_by_ls(account)
+                conn.init_session(user_id)
+                conn.overwrite_subscriptions(account, tariff_list)
     return error
 
 
@@ -205,6 +276,51 @@ def handler_set_promised_payment():
     return json.dumps(response, ensure_ascii=False, encoding='utf8')
 
 
+def tariff_action(action_name, action_func):
+    account = request.args.get('account_id', None)
+    tariff = request.args.get('tariff_id', None)
+    log('%s %s %s' % (action_name, account, tariff))
+
+    error = 0
+    if account is None or tariff is None:
+        error = 1
+    else:
+        try:
+            action_func(account, tariff)
+        except HydraAdapterError as e:
+            log(e.message)
+            error = e.code
+        except Exception as e:
+            log(e.message)
+            error = -1
+
+    response = {
+        "error_code": error,
+    }
+    log(str(response))
+    return json.dumps(response)
+
+
+@app.route("/add_tariff", methods=['GET'])
+def handler_add_tariff():
+    """
+    ошибки:
+    2 - аккаунт не найден
+    1000 - тариф не найден
+    """
+    return tariff_action('add_tariff', add_tariff)
+
+
+@app.route("/remove_tariff", methods=['GET'])
+def handler_remove_tariff():
+    """
+    ошибки:
+    2 - аккаунт не найден
+    1000 - тариф не найден
+    """
+    return tariff_action('remove_tariff', remove_tariff)
+
+
 @app.route("/add_device", methods=['GET'])
 def handler_add_device():
     """
@@ -212,7 +328,10 @@ def handler_add_device():
     2 - аккаунт не найден
     3 - все устройства уже зарегистрированы или устройство не найдено
     4 - MAC не найден
+    1010 - устройство не найдено (или привязано не к данному пользователю)
+    1011 - превышен лимит устройств (нет свободных пакетов)
     """
+
     account = request.args.get('account_id', None)
     mac = request.args.get('mac', '')
     mac = mac_convert(mac)
@@ -256,7 +375,7 @@ def handler_set_mac_close_date():
         error = 1
     else:
         try:
-             set_mac_close_date(mac, account)
+            set_mac_close_date(mac, account)
         except HydraAdapterError as e:
             log(e.message)
             error = e.code
@@ -273,4 +392,3 @@ def handler_set_mac_close_date():
 
 if __name__ == "__main__":
     app.run()
- 
