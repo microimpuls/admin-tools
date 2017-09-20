@@ -1,0 +1,22 @@
+#!/bin/bash
+FIRST=1
+echo "{
+ \"data\":["
+
+grep error_log /etc/nginx/sites-enabled/* /etc/nginx/conf.d/* /usr/local/nginx-microvod/conf/nginx.conf /usr/local/nginx-micropvr/conf/nginx.conf 2>/dev/null |
+tr -d ";" |
+while read CONFFILE X LOGFILE
+  do
+    if [ $FIRST -ne 1 ]
+        then echo ","
+    fi
+    FIRST=0
+    PREFIX=$(echo $CONFFILE $LOGFILE|cut -f1-4 -d "/")
+    C_PREFIX=$(echo $PREFIX|tr "/" "_")
+    C_LOGFILE=$(echo $LOGFILE|tr "/" "_")
+    echo $LOGFILE | grep -q ^/ &&
+    echo -e "\t{\t\t\"{#TAILPREFIX}\":\"${C_LOGFILE}\",\n   \t\t\t\"{#LOGFILE}\":\"${LOGFILE}\"\t}" ||
+    echo -e "\t{\t\t\"{#TAILPREFIX}\":\"${C_PREFIX}_${C_LOGFILE}\",\n   \t\t\t\"{#LOGFILE}\":\"${PREFIX}/${LOGFILE}\"\t}"
+  done
+echo -e "\n   ]
+}"

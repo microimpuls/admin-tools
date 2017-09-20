@@ -15,6 +15,7 @@ print "Check client..."
 client = get_client(config.CLIENT_ID)
 client_id = client['id']
 print "Client ID: %d" % client['id']
+#new_client_id = 93
 
 new_client_id = set_client(client)
 print "Ok..."
@@ -94,19 +95,6 @@ print "Copy geo"
 # ip2city_id_map = insert('geo_ip2locationcity', geo_ip2city)
 # city_id_map = insert('geo_city', geo_city)
 
-# CASSERVICE
-print "Copy casservice"
-
-casservice = to_list(get_by('tvmiddleware_casservice', 'client_id', client_id))
-casservice_devices = get_by_list('tvmiddleware_casservice_devices', 'casservice_id', casservice, 0)
-
-replace_id('tvmiddleware_casservice', 'client_id', new_client_id, casservice)
-casservice_id_map = insert('tvmiddleware_casservice', casservice)
-
-# replace_many_ids('tvmiddleware_casservice_devices', 'playdevice_id', play_id_map, casservice_devices)
-# replace_many_ids('tvmiddleware_casservice_devices', 'casservice_id', casservice_id_map, casservice_devices)
-casservice_devices_id_map = insert('tvmiddleware_casservice_devices', casservice_devices)
-
 
 # DATACENTER
 print "Copy dc"
@@ -119,14 +107,15 @@ datacenter_id_map = insert('tvmiddleware_datacenter', datacenter)
 print "Copy SS"
 
 streamservice = to_list(get_by('tvmiddleware_streamservice', 'client_id', client_id))
-streamservice_cas_service = get_by_list('tvmiddleware_streamservice_cas_service', 'streamservice_id', streamservice, 0)
+
+#streamservice_cas_service = get_by_list('tvmiddleware_streamservice_cas_service', 'streamservice_id', streamservice, 0)
 
 replace_id('tvmiddleware_streamservice', 'client_id', new_client_id, streamservice)
 streamservice_id_map = insert('tvmiddleware_streamservice', streamservice)
 
 # replace_many_ids('tvmiddleware_streamservice_cas_service', 'streamservice_id', streamservice_id_map, streamservice_cas_service)
 # replace_many_ids('tvmiddleware_streamservice_cas_service', 'casservice_id', casservice_id_map, streamservice_cas_service)
-insert('tvmiddleware_streamservice_cas_service', streamservice_cas_service)
+#insert('tvmiddleware_streamservice_cas_service', streamservice_cas_service)
 
 # TARIFF
 print "Copy tariff"
@@ -311,7 +300,7 @@ maintenance_stream_services = to_list(get_by_list('tvmiddleware_maintenance_stre
 # replace_many_ids('tvmiddleware_maintenance_stream_services', 'maintenance_id', maintenance_id_map, maintenance_stream_services)
 # replace_many_ids('tvmiddleware_maintenance_stream_services', 'streamservice_id', streamservice_id_map, maintenance_stream_services)
 maintenance_stream_services_id_map = insert('tvmiddleware_maintenance_stream_services', maintenance_stream_services)
-
+"""
 # widget
 print "Copy widget"
 
@@ -326,7 +315,7 @@ widgetproperty_id_map = insert('widgets_widgetproperty', widgetproperty)
 widgettoken = to_list(get_by_list('widgets_widgettoken', 'widget_id', widget, 0))
 # replace_many_ids('widgets_widgettoken', 'widget_id', widget_id_map, widgettoken)
 widgettoken_id_map = insert('widgets_widgettoken', widgettoken)
-
+"""
 # BILLING
 print "Copy billing"
 

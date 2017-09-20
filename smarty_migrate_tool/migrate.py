@@ -35,6 +35,7 @@ def parse_result(row, args):
 def get_client(r_client_id):
     tmpl = tables_temps['clients_client']
     sql = tmpl.select + " WHERE id = %s" % r_client_id
+    print sql
     from_cur.execute(sql)
     if from_cur.rowcount > 1:
         print("More than one client was found")
@@ -52,12 +53,14 @@ def set_client(client):
 
     sql = tmpl.insert + "("
     for field in tmpl.fields:
+        if client[field[0]] == None:
+            client[field[0]] = 'NULL'
         # if field[0] == 'id':
         #    continue
         if field[1] == 1:
             sql += "'%s', " % client[field[0]]
         else:
-            sql += "%d, " % client[field[0]]
+            sql += "%s, " % client[field[0]]
 
     sql = sql[:-2] + ")"
     print sql
@@ -106,8 +109,9 @@ def clear_value(value, descr):
         return "%d, " % value
     if descr[1] == 3 or descr[1] == 4:
         return "'%s', " % value.isoformat()
-    if descr[1] == 5:
+    if descr[1] == 5 or descr[1] == 0:
         return "%f, " % value
+
     raise TypeError("Unknown SQL type")
 
 
@@ -122,6 +126,7 @@ def insert_one(tmpl, to_insert):
         sql += clear_value(to_insert[i], tmpl.fields[i])
     sql = sql[:-2] + ')'
     try:
+        print sql
         to_cur.execute(sql)
     except MySQLdb.ProgrammingError as l:
         print sql
