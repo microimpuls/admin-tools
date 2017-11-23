@@ -1,11 +1,5 @@
 # -*- coding: utf-8 -*-
 
-"""
-Веб-сервер на Flask для удалённого вызова функций Hydra через HTTP-запросы
-
-(c) Alexander Larin, 2016
-"""
-
 from flask import Flask, request
 import json
 from hydra_adapter import HydraConnection, HydraAdapterError
@@ -91,6 +85,8 @@ def set_mac_close_date(mac, account):
 
 def check_device(conn, user_id, serial, mac):
     """
+    Проверка возможности регистрации устройства
+
     0 - проверка успешна
     1 - нет такого устройства в БД
     2 - превышен лимит устройств
@@ -105,9 +101,8 @@ def check_device(conn, user_id, serial, mac):
 
     # проверяем, что приставка есть в базе у данного пользователя
     mac = mac.lower()
-    serial = serial.lower()
     for stb in stb_list:
-        if stb[5].lower() == mac and stb[2].lower() == serial:
+        if stb[5].lower() == mac:
             return 0
     return 1
 
@@ -133,28 +128,50 @@ def check_login_pass(account, user, password):
     return error
 
 
-def add_tariff(account, tariff):
+def filter_goods(goods):
+    tariff_list = map(lambda t: t[0], goods)
+    parent_sub_id = None
+    for good in goods:
+        if len(good) > 2 and good[2]:
+            parent_sub_id = good[2]
+    return tariff_list, parent_sub_id
+
+
+def remove_tariff(account, tariff):
+    """
+    Получаем список тарифов,
+    убираем из списка все, соответствующе переданному тарифу,
+    перезаписываем список, если он изменился
+    """
     error = 0
     removing_list = adapter_utils.get_all_billing_tariffs(tariff, settings.tariffs)
     if len(removing_list) > 0:
         with HydraConnection() as conn:
             goods = conn.get_goods(account)
-            tariff_list = map(lambda t: t[0], goods)
-
-            perform_action = False
-            for tariff_id in removing_list:
-                if tariff_id in tariff_list:
-                    tariff_list.remove(tariff_id)
-                    perform_action = True
+            tariff_list, parent_sub_id = filter_goods(goods)
                     
-            if perform_action:
-                user_id, account_id = conn.get_account_by_ls(account)
-                conn.init_session(user_id)
-                conn.overwrite_subscriptions(account, tariff_list)
+            if parent_sub_id is not None:
+                perform_action = False
+                for tariff_id in removing_list:
+                    if tariff_id in tariff_list:
+                        tariff_list.remove(tariff_id)
+                        perform_action = True
+                        
+                if perform_action:
+                    user_id, account_id = conn.get_account_by_ls(account)
+                    conn.init_session(user_id)
+                    conn.overwrite_subscriptions(account, tariff_list, parent_sub_id)
+            else:
+                error = 1004
     return error
 
 
-def remove_tariff(account, tariff):
+def add_tariff(account, tariff):
+    """
+    Получаем список тарифов,
+    добавляем первый тариф из биллинга, который соответствует тарифу,
+    перезаписываем, если список изменился
+    """
     error = 0
     tariff_id = adapter_utils.get_any_billing_tariff(tariff, settings.tariffs)
     if tariff_id == -1:
@@ -162,17 +179,24 @@ def remove_tariff(account, tariff):
     else:
         with HydraConnection() as conn:
             goods = conn.get_goods(account)
-            tariff_list = map(lambda t: t[0], goods)
-            if tariff_id not in tariff_list:
-                user_id, account_id = conn.get_account_by_ls(account)
-                conn.init_session(user_id)
-                conn.overwrite_subscriptions(account, tariff_list)
+            tariff_list, parent_sub_id = filter_goods(goods)
+                    
+            if parent_sub_id is not None:
+                if tariff_id not in tariff_list:
+                    user_id, account_id = conn.get_account_by_ls(account)
+                    conn.init_session(user_id)
+                    conn.overwrite_subscriptions(account, tariff_list, parent_sub_id)
+            else:
+                error = 1004
     return error
 
 
 @app.route("/check_login_pass", methods=['GET'])
 def handler_check_login_pass():
     """
+    Проверяет логин и пароль аккаунта.
+    Возвращает только поле error.
+
     ошибки:
     2 - аккаунт не найден
     1000 - неверный логин или пароль
@@ -201,6 +225,14 @@ def handler_check_login_pass():
 @app.route("/get_balance", methods=['GET'])
 def handler_get_balance():
     """
+    Возвращает информацию о балансе.
+    Поля возвращаемого объекта:
+        error - код ошибки
+        balance - текущий баланс
+        servs - список услуг у клиента
+        max_promised_payment - максимальная сумма обещаного платежа
+        recommended_payment - рекомендуемый платёж
+
     ошибки:
     2 - аккаунт не найден
     """
@@ -237,6 +269,11 @@ def handler_get_balance():
 @app.route("/set_promised_payment", methods=['GET'])
 def handler_set_promised_payment():
     """
+    Устанавливает обещанный платёж.
+    Поля возвращаемого объекта:
+        error - описание ошибки
+        error_code - код ошибки
+
     ошибки:
     4 - MAC не найден
     1000 - невозможно установить обещанный платёж
@@ -304,9 +341,12 @@ def tariff_action(action_name, action_func):
 @app.route("/add_tariff", methods=['GET'])
 def handler_add_tariff():
     """
+    Подписывает пользователя на услугу.
+
     ошибки:
     2 - аккаунт не найден
     1000 - тариф не найден
+    1004 - отсутствует базовая подписка
     """
     return tariff_action('add_tariff', add_tariff)
 
@@ -314,9 +354,12 @@ def handler_add_tariff():
 @app.route("/remove_tariff", methods=['GET'])
 def handler_remove_tariff():
     """
+    Отписывает пользователя от услуги.
+
     ошибки:
     2 - аккаунт не найден
     1000 - тариф не найден
+    1004 - отсутствует базовая подписка
     """
     return tariff_action('remove_tariff', remove_tariff)
 
@@ -324,6 +367,8 @@ def handler_remove_tariff():
 @app.route("/add_device", methods=['GET'])
 def handler_add_device():
     """
+    Регистрирует устройство с определённым MAC-адресом и серийным номером.
+
     ошибки:
     2 - аккаунт не найден
     3 - все устройства уже зарегистрированы или устройство не найдено

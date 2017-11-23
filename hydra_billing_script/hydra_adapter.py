@@ -1,12 +1,4 @@
 # -*- coding: utf-8 -*-
-
-"""
-Библиотека для вызова некоторых функций в системе Hydra напрямую через работу с СУБД
-Использует cx_Oracle
-
-(c) Alexander Larin, 2016
-"""
-
 import cx_Oracle
 import os
 import datetime
@@ -174,7 +166,7 @@ class HydraConnection:
             SS.N_SUBJECT_ID=SI_SUBJECTS_PKG_S.GET_BASE_SUBJECT_ID(SACC.N_SUBJECT_ID) and
             SUB.D_END IS NULL and
             GS.N_PARENT_GOOD_ID IN (12181237601, 50667201) and
-            exists (select N_DOC_IDFROM SD_V_INVOICES_C CCC
+            exists (select N_DOC_ID from SD_V_INVOICES_C CCC
                     where CCC.D_END > SYSDATE and
                           CCC.N_DOC_ID = SUB.N_INVOICE_ID and
                           CCC.N_SERVICE_ID='1662333301')
@@ -214,7 +206,7 @@ class HydraConnection:
             SS.N_SUBJECT_ID=SI_SUBJECTS_PKG_S.GET_BASE_SUBJECT_ID(SACC.N_SUBJECT_ID) and
             SUB.D_END IS NULL and
             GS.N_PARENT_GOOD_ID IN (12181237601, 50667201) and
-            exists (select N_DOC_IDFROM SD_V_INVOICES_C CCC
+            exists (select N_DOC_ID from SD_V_INVOICES_C CCC
                     where CCC.D_END > SYSDATE and
                           CCC.N_DOC_ID = SUB.N_INVOICE_ID and
                           CCC.N_SERVICE_ID='1662333301')
@@ -229,7 +221,7 @@ class HydraConnection:
     _OVERWRITE_SUBSCRIPTIONS = u"""
     BEGIN
       AP_USER_OFFICE_PKG.PROCESS_ADD_GOODS(
-        num_N_PAR_SUBJ_GOOD_ID => 10444710501,
+        num_N_PAR_SUBJ_GOOD_ID => :parent_id,
         t_GOODS_LIST => AIS_NET.NUMBER_TABLE (%s)
       );
     END;
@@ -351,9 +343,9 @@ class HydraConnection:
         result = self.query(query, args)
         return result
 
-    def overwrite_subscriptions(self, account, tariffs):
+    def overwrite_subscriptions(self, account, tariffs, parent_id):
         query = HydraConnection._OVERWRITE_SUBSCRIPTIONS % ','.join(tariffs)
-        self.query_wo_fetch(query, {})
+        self.query_wo_fetch(query, {'parent_id': parent_id})
 
     def set_promised_payment(self, account_id):
         query = "begin\nAP_USER_OFFICE_PKG.SET_PROMISED_PAY(:account_id);\nend;"
