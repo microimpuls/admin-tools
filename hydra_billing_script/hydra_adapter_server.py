@@ -86,7 +86,6 @@ def set_mac_close_date(mac, account):
 def check_device(conn, user_id, serial, mac):
     """
     Проверка возможности регистрации устройства
-
     0 - проверка успешна
     1 - нет такого устройства в БД
     2 - превышен лимит устройств
@@ -137,27 +136,24 @@ def filter_goods(goods):
     return tariff_list, parent_sub_id
 
 
-def remove_tariff(account, tariff):
+def remove_tariff(account, tariff_id):
     """
     Получаем список тарифов,
     убираем из списка все, соответствующе переданному тарифу,
     перезаписываем список, если он изменился
     """
     error = 0
-    removing_list = adapter_utils.get_all_billing_tariffs(tariff, settings.tariffs)
-    if len(removing_list) > 0:
+    # removing_list = adapter_utils.get_all_billing_tariffs(tariff_id, settings.tariffs)
+    if tariff_id == -1:
+        error = 1010
+    else:
         with HydraConnection() as conn:
             goods = conn.get_goods(account)
             tariff_list, parent_sub_id = filter_goods(goods)
-                    
+
             if parent_sub_id is not None:
-                perform_action = False
-                for tariff_id in removing_list:
-                    if tariff_id in tariff_list:
-                        tariff_list.remove(tariff_id)
-                        perform_action = True
-                        
-                if perform_action:
+                if tariff_id in tariff_list:
+                    tariff_list.remove(tariff_id)
                     user_id, account_id = conn.get_account_by_ls(account)
                     conn.init_session(user_id)
                     conn.overwrite_subscriptions(account, tariff_list, parent_sub_id)
@@ -166,23 +162,24 @@ def remove_tariff(account, tariff):
     return error
 
 
-def add_tariff(account, tariff):
+def add_tariff(account, tariff_id):
     """
     Получаем список тарифов,
     добавляем первый тариф из биллинга, который соответствует тарифу,
     перезаписываем, если список изменился
     """
     error = 0
-    tariff_id = adapter_utils.get_any_billing_tariff(tariff, settings.tariffs)
+    # tariff_id = adapter_utils.get_any_billing_tariff(tariff_id, settings.tariffs)
     if tariff_id == -1:
         error = 1010
     else:
         with HydraConnection() as conn:
             goods = conn.get_goods(account)
             tariff_list, parent_sub_id = filter_goods(goods)
-                    
+
             if parent_sub_id is not None:
                 if tariff_id not in tariff_list:
+                    tariff_list.append(tariff_id)
                     user_id, account_id = conn.get_account_by_ls(account)
                     conn.init_session(user_id)
                     conn.overwrite_subscriptions(account, tariff_list, parent_sub_id)
@@ -196,7 +193,6 @@ def handler_check_login_pass():
     """
     Проверяет логин и пароль аккаунта.
     Возвращает только поле error.
-
     ошибки:
     2 - аккаунт не найден
     1000 - неверный логин или пароль
@@ -232,7 +228,6 @@ def handler_get_balance():
         servs - список услуг у клиента
         max_promised_payment - максимальная сумма обещаного платежа
         recommended_payment - рекомендуемый платёж
-
     ошибки:
     2 - аккаунт не найден
     """
@@ -273,7 +268,6 @@ def handler_set_promised_payment():
     Поля возвращаемого объекта:
         error - описание ошибки
         error_code - код ошибки
-
     ошибки:
     4 - MAC не найден
     1000 - невозможно установить обещанный платёж
@@ -314,8 +308,11 @@ def handler_set_promised_payment():
 
 
 def tariff_action(action_name, action_func):
+    """
+    Здесь tariff_id - ID тарифа из биллинга
+    """
     account = request.args.get('account_id', None)
-    tariff = request.args.get('tariff_id', None)
+    tariff = get_int('tariff_id')
     log('%s %s %s' % (action_name, account, tariff))
 
     error = 0
@@ -342,7 +339,6 @@ def tariff_action(action_name, action_func):
 def handler_add_tariff():
     """
     Подписывает пользователя на услугу.
-
     ошибки:
     2 - аккаунт не найден
     1000 - тариф не найден
@@ -355,7 +351,6 @@ def handler_add_tariff():
 def handler_remove_tariff():
     """
     Отписывает пользователя от услуги.
-
     ошибки:
     2 - аккаунт не найден
     1000 - тариф не найден
@@ -368,7 +363,6 @@ def handler_remove_tariff():
 def handler_add_device():
     """
     Регистрирует устройство с определённым MAC-адресом и серийным номером.
-
     ошибки:
     2 - аккаунт не найден
     3 - все устройства уже зарегистрированы или устройство не найдено

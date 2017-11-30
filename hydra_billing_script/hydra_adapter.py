@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import cx_Oracle
 import os
+import io
 import datetime
 from settings import *
 os.environ["NLS_LANG"] = "Russian_Russia.UTF8"
@@ -8,6 +9,13 @@ os.environ["NLS_LANG"] = "Russian_Russia.UTF8"
 # имя типа пакета в поле VC_GOOD_TYPE_NAME
 PACKET_TYPE_NAME = u'Пакет услуг'
 
+def log_sql(message):
+    try:
+        message = u"%s : %s \n" % (datetime.datetime.now().isoformat(), message)
+        with io.open('/var/log/microimpuls/hydra_sql.log', 'a', encoding='utf8') as f:
+            f.write(message)
+    except Exception as e:
+        print "Can't write log: " + repr(e)
 
 def fine_print(toprint):
     for result in toprint:
@@ -204,6 +212,7 @@ class HydraConnection:
             SUB.VC_ACCOUNT= :account and
             SACC.N_ACCOUNT_ID=SUB.N_ACCOUNT_ID and
             SS.N_SUBJECT_ID=SI_SUBJECTS_PKG_S.GET_BASE_SUBJECT_ID(SACC.N_SUBJECT_ID) and
+            SUB.N_PAR_SUBSCRIPTION_ID IS NOT NULL AND
             SUB.D_END IS NULL and
             GS.N_PARENT_GOOD_ID IN (12181237601, 50667201) and
             exists (select N_DOC_ID from SD_V_INVOICES_C CCC
@@ -344,8 +353,9 @@ class HydraConnection:
         return result
 
     def overwrite_subscriptions(self, account, tariffs, parent_id):
-        query = HydraConnection._OVERWRITE_SUBSCRIPTIONS % ','.join(tariffs)
+        query = HydraConnection._OVERWRITE_SUBSCRIPTIONS % ','.join(map(str, tariffs))
         self.query_wo_fetch(query, {'parent_id': parent_id})
+        self.commit()
 
     def set_promised_payment(self, account_id):
         query = "begin\nAP_USER_OFFICE_PKG.SET_PROMISED_PAY(:account_id);\nend;"
@@ -427,13 +437,28 @@ class HydraConnection:
         self.query_wo_fetch(HydraConnection._ADD_MAC, args)
 
     def get_all_services(self, user_id, account_id):
+#        query = """
+#            select VC_GOOD_NAME, N_SERVS_SUM 
+#            from table(SI_USERS_PKG_S.USERS_CURRENT_SERVS_LIST(:user_id)) 
+#            where N_ACCOUNT_ID = :account_id
+#        """
+
         query = """
-            select VC_GOOD_NAME, N_SERVS_SUM 
-            from table(SI_USERS_PKG_S.USERS_CURRENT_SERVS_LIST(:user_id)) 
-            where N_ACCOUNT_ID = :account_id
+            SELECT 
+                    SVS.VC_SERVICE, 
+                    SDC.N_SUM
+            FROM    SI_V_SUBSCRIPTIONS SVS,
+                    SD_V_INVOICES_C SDC
+            WHERE   SVS.N_CUSTOMER_ID=:user_id
+            AND     SVS.D_END IS NULL
+            AND     SVS.N_SERVICE_ID NOT IN ('1662333301', '40217401', '6118165901')
+            AND     SVS.N_INVOICE_ID=SDC.N_DOC_ID
+            AND     SDC.D_END>=SYSDATE
+            AND     SVS.N_SUBSCRIPTION_ID=SDC.N_SUBJ_GOOD_ID
         """
+
         args = {
-            'account_id': account_id,
+#            'account_id': account_id,
             'user_id': user_id,
         }
         return self.query(query, args)
