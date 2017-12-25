@@ -166,7 +166,7 @@ def update_user_tariffs(args):
     # эти тарифы подключаем
     smarty_tariff_list = get_tariff_list(tariff_list, tariffs)
     # остальные отключаем
-    inverted_smarty_tariff_list = get_inverted_tariff_list(smarty_tariff_list, promo_tariffs)
+    inverted_smarty_tariff_list = get_inverted_tariff_list(smarty_tariff_list, tariffs)
     # эти промо-тарифы отключаем
     promo_tariff_list = get_tariff_list(tariff_list, promo_tariffs)
     # остальные возвращаем на место
