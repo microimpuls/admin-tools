@@ -151,6 +151,10 @@ def remove_tariff(account, tariff_id):
             goods = conn.get_goods(account)
             tariff_list, parent_sub_id = filter_goods(goods)
 
+            if parent_sub_id is None:
+                main_goods = conn.get_main_goods(account)
+                l, parent_sub_id = filter_goods(main_goods)
+
             if parent_sub_id is not None:
                 if tariff_id in tariff_list:
                     tariff_list.remove(tariff_id)
@@ -176,6 +180,10 @@ def add_tariff(account, tariff_id):
         with HydraConnection() as conn:
             goods = conn.get_goods(account)
             tariff_list, parent_sub_id = filter_goods(goods)
+
+            if parent_sub_id is None:
+                main_goods = conn.get_main_goods(account)
+                l, parent_sub_id = filter_goods(main_goods)
 
             if parent_sub_id is not None:
                 if tariff_id not in tariff_list:

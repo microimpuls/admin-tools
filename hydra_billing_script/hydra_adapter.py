@@ -10,6 +10,7 @@ os.environ["NLS_LANG"] = "Russian_Russia.UTF8"
 PACKET_TYPE_NAME = u'Пакет услуг'
 
 def log_sql(message):
+    return
     try:
         message = u"%s : %s \n" % (datetime.datetime.now().isoformat(), message)
         with io.open('/var/log/microimpuls/hydra_sql.log', 'a', encoding='utf8') as f:
@@ -222,6 +223,47 @@ class HydraConnection:
     """
 
     u"""
+    Получает список основных активных подписок; используется для случая, если не удалось найти ID родительской подписки обычным способом.
+    SUB.N_SERVICE_ID       - ID услуги
+    GS.N_GOOD_ID 	       - ID услуги в номенклатуре
+    SUB.N_PAR_SUBSCRIPTION_ID 	- ID родительской услуги
+    SUB.N_DOC_ID		   - ID договора
+    SUB.N_ACCOUNT_ID       - ID лицевого счета
+    SUB.N_OBJECT_ID        - ID подписанного оборудования
+    SUB.VC_SERVICE         - Наименование услуги
+    SS.VC_NAME             - Полное наименование субъекта учёта
+    """
+    _QUERY_GET_MAIN_SUBSCRIPTIONS = u"""
+        select
+            SUB.N_SERVICE_ID,
+            GS.N_GOOD_ID,
+            SUB.N_SUBSCRIPTION_ID,
+            SUB.N_DOC_ID,
+            SUB.N_ACCOUNT_ID,
+            SUB.N_OBJECT_ID,
+            SUB.VC_SERVICE,
+            SS.VC_NAME,
+            SS.N_SUBJECT_ID
+        from
+            SI_V_SUBSCRIPTIONS     SUB,
+            SR_V_GOODS_SIMPLE      GS,
+            SI_V_SUBJ_ACCOUNTS     SACC,
+            SI_V_SUBJECTS          SS
+        where
+            GS.N_GOOD_ID = SUB.N_SERVICE_ID and
+            SUB.VC_ACCOUNT= :account and
+            SACC.N_ACCOUNT_ID=SUB.N_ACCOUNT_ID and
+            SS.N_SUBJECT_ID=SI_SUBJECTS_PKG_S.GET_BASE_SUBJECT_ID(SACC.N_SUBJECT_ID) and
+            SUB.N_PAR_SUBSCRIPTION_ID IS NULL AND
+            SUB.D_END IS NULL and
+            GS.N_PARENT_GOOD_ID IN (12181237601, 50667201) and
+            exists (select N_DOC_ID from SD_V_INVOICES_C CCC
+                    where CCC.D_END > SYSDATE and
+                          CCC.N_DOC_ID = SUB.N_INVOICE_ID and
+                          CCC.N_SERVICE_ID='1662333301')
+    """
+
+    u"""
     Перезаписывает подписки.
     num_N_PAR_SUBJ_GOOD_ID - идентификатор подписки на родительскую услугу.
     t_GOODS_LIST - идентификаторы услуг, которые должны быть подключены,
@@ -271,6 +313,8 @@ class HydraConnection:
         cur.execute(query, args)
         out = cur.fetchall()
         cur.close()
+        log_sql(query)
+        log_sql(args)
         return out
 
     def query_wo_fetch(self, query, args):
@@ -280,6 +324,8 @@ class HydraConnection:
         cur = self._con.cursor()
         cur.execute(query, args)
         cur.close()
+        log_sql(query)
+        log_sql(args)
 
     def call_function(self, function, return_type, args):
         """
@@ -348,6 +394,12 @@ class HydraConnection:
 
     def get_goods(self, account):
         query = HydraConnection._QUERY_GET_SUBSCRIPTIONS
+        args = {'account': account}
+        result = self.query(query, args)
+        return result
+
+    def get_main_goods(self, account):
+        query = HydraConnection._QUERY_GET_MAIN_SUBSCRIPTIONS
         args = {'account': account}
         result = self.query(query, args)
         return result
